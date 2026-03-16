@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Công cụ tính lãi suất vay ngân hàng</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.3.0/flowbite.min.css" rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body class="bg-gray-50 p-4 md:p-10">
+
+    <div id="export-area" class="max-w-4xl mx-auto bg-white rounded-xl shadow-lg p-6 border border-gray-200">
+        <h2 class="text-2xl font-bold text-gray-800 mb-6 text-center">BẢNG TÍNH LÃI SUẤT TRẢ GÓP</h2>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div class="space-y-4">
+                <div>
+                    <label class="block mb-2 text-sm font-medium text-gray-700">Số tiền cần vay (VND)</label>
+                    <input type="number" id="loan-amount" value="500000000" step="1000000" class="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block mb-2 text-sm font-medium text-gray-700">Lãi suất hàng năm (%)</label>
+                    <input type="number" id="annual-interest" value="8.5" step="0.1" class="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block mb-2 text-sm font-medium text-gray-700">Thời hạn vay (Số năm)</label>
+                    <input type="number" id="loan-years" value="10" class="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                </div>
+
+                <div class="p-4 bg-blue-50 rounded-lg border border-blue-100 mt-6">
+                    <p class="text-sm text-blue-800">Trả mỗi tháng (ước tính):</p>
+                    <p id="monthly-payment" class="text-2xl font-bold text-blue-700">0 VND</p>
+                </div>
+            </div>
+
+            <div class="flex flex-col items-center">
+                <div id="donut-chart" class="w-full"></div>
+                <div class="mt-4 text-center">
+                    <p class="text-sm text-gray-500 italic">* Biểu đồ so sánh Tổng Gốc và Tổng Lãi</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-8 pt-6 border-t border-gray-100 flex justify-between items-center">
+            <div class="text-sm text-gray-600">
+                <p>Tổng tiền phải trả: <span id="total-payment" class="font-semibold text-gray-900">0 VND</span></p>
+                <p>Tổng tiền lãi: <span id="total-interest" class="font-semibold text-red-600">0 VND</span></p>
+            </div>
+            <button id="download-pdf" class="text-white bg-green-600 hover:bg-green-700 font-medium rounded-lg text-sm px-5 py-2.5 flex items-center shadow-md transition-all">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="C4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                Tải xuống PDF
+            </button>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+
+    <script>
+        const { jsPDF } = window.jspdf;
+
+        window.addEventListener('load', function() {
+            // Khởi tạo biểu đồ
+            const options = {
+        series: [0, 0], // Sẽ được cập nhật bằng dữ liệu thực
+        colors: ["#1C64F2", "#E02424"], // Xanh cho Gốc, Đỏ cho Lãi
+        chart: {
+            height: 360, // Thu nhỏ chiều cao tổng thể một chút
+            type: "donut",
+            fontFamily: "Inter, sans-serif" // Sử dụng phông chữ chuẩn Flowbite
+        },
+        labels: ["Tiền gốc", "Tiền lãi"],
+        stroke: { colors: ["transparent"] }, // Làm cho các viền trong suốt
+        legend: {
+            position: "bottom", // Chuyển chú thích xuống dưới
+            offsetY: 0,
+            fontSize: '12px', // Thu nhỏ kích thước phông chú thích
+            markers: { radius: 12 } // Làm cho các dấu tròn đẹp hơn
+        },
+        plotOptions: {
+            pie: {
+                donut: {
+                    size: "75%", // *** TĂNG KÍCH THƯỚC LỖ TRUNG TÂM (trước đây có thể là 65-70%) ***
+                    labels: {
+                        show: true,
+                        name: {
+                            show: true,
+                            fontSize: "13px", // *** THU NHỎ PHÔNG CHỮ NHÃN (ví dụ: 'Tổng trả') ***
+                            offsetY: 15 // *** ĐIỀU CHỈNH VỊ TRÍ NHÃN LÊN TRÊN MỘT CHÚT ***
+                        },
+                        value: {
+                            show: true,
+                            fontSize: "18px", // *** THU NHỎ PHÔNG CHỮ GIÁ TRỊ (con số tiền) ***
+                            fontWeight: 700,
+                            color: "#111827", // Màu chữ đậm của Flowbite
+                            offsetY: -20, // *** ĐIỀU CHỈNH VỊ TRÍ CON SỐ LÊN TRÊN ***
+                            formatter: function (val) {
+                                // Sử dụng hàm định dạng tiền tệ có sẵn (sẽ được định nghĩa sau)
+                                return formatCurrency(val);
+                            }
+                        },
+                        total: {
+                            show: true,
+                            label: "Tổng trả",
+                            fontSize: "13px",
+                            color: "#6B7280", // Màu chữ xám của Flowbite
+                            formatter: function (w) {
+                                const sum = w.globals.seriesTotals.reduce((a, b) => a + b, 0);
+                                return formatCurrency(sum);
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        dataLabels: { enabled: false }, // Ẩn các nhãn dữ liệu trên các phần của biểu đồ
+        responsive: [{ // Cấu hình cho màn hình nhỏ
+            breakpoint: 480,
+            options: {
+                chart: { height: 260 },
+                legend: { position: "bottom" }
+            }
+        }]
+    };
+
+            const chart = new ApexCharts(document.querySelector("#donut-chart"), options);
+            chart.render();
+
+            // Các phần tử DOM
+            const inputAmount = document.getElementById('loan-amount');
+            const inputRate = document.getElementById('annual-interest');
+            const inputYears = document.getElementById('loan-years');
+
+            function formatCurrency(value) {
+                return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
+            }
+
+            function calculateLoan() {
+                const P = parseFloat(inputAmount.value) || 0; // Tiền gốc
+                const annualR = (parseFloat(inputRate.value) || 0) / 100; // Lãi năm
+                const monthlyR = annualR / 12; // Lãi tháng
+                const n = (parseFloat(inputYears.value) || 0) * 12; // Tổng số tháng
+
+                let monthlyPayment = 0;
+                let totalInterest = 0;
+
+                if (monthlyR > 0) {
+                    // Công thức Amortization: M = P * [r(1+r)^n] / [(1+r)^n - 1]
+                    monthlyPayment = P * (monthlyR * Math.pow(1 + monthlyR, n)) / (Math.pow(1 + monthlyR, n) - 1);
+                } else {
+                    monthlyPayment = P / n;
+                }
+
+                const totalPayment = monthlyPayment * n;
+                totalInterest = totalPayment - P;
+
+                // Cập nhật giao diện
+                document.getElementById('monthly-payment').innerText = formatCurrency(monthlyPayment);
+                document.getElementById('total-payment').innerText = formatCurrency(totalPayment);
+                document.getElementById('total-interest').innerText = formatCurrency(totalInterest);
+
+                // Cập nhật biểu đồ
+                chart.updateSeries([P, totalInterest]);
+            }
+
+            // Lắng nghe sự kiện
+            [inputAmount, inputRate, inputYears].forEach(el => el.addEventListener('input', calculateLoan));
+
+            // Tính toán lần đầu
+            calculateLoan();
+
+            // Xử lý xuất PDF
+            document.getElementById('download-pdf').addEventListener('click', function() {
+                const btn = this;
+                btn.innerText = "Đang xử lý...";
+                
+                const element = document.getElementById('export-area');
+                html2canvas(element, { scale: 2 }).then(canvas => {
+                    const imgData = canvas.toDataURL('image/png');
+                    const pdf = new jsPDF('p', 'mm', 'a4');
+                    const imgProps = pdf.getImageProperties(imgData);
+                    const pdfWidth = pdf.internal.pageSize.getWidth();
+                    const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+                    
+                    pdf.addImage(imgData, 'PNG', 0, 10, pdfWidth, pdfHeight);
+                    pdf.save("Bang-tinh-lai-suat.pdf");
+                    
+                    btn.innerHTML = '<svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="C4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg> Tải xuống PDF';
+                });
+            });
+        });
+    </script>
+</body>
+</html>
